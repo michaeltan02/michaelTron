@@ -82,7 +82,7 @@ void gameInit(tron * this);
 void makeBorder(tron * this);
 
 /*** Input & Output ***/
-void processKeypress(void);
+void processKeypress(tron * this);
 
 typedef struct abuf {
     char* b;
@@ -116,7 +116,7 @@ int main() {
 
     while (1) {
         drawScreen(&tronGame);
-        processKeypress();
+        processKeypress(&tronGame);
     }
 
     return 0;
@@ -127,6 +127,8 @@ void gameInit(tron * this) {
     if (getWindowSize(&this->boardRows, &this->boardCols) == -1) {
         die("getWindowSize");
     }
+
+    this->boardCols--; // this is just cuz WSL seem to overreport by one col
 
     this->gameBoard = (char **) malloc(sizeof(char *) * this->boardRows);
     for (int i = 0; i < this->boardRows; i++) {
@@ -149,13 +151,12 @@ void makeBorder(tron * this) {
     for (int i = 0; i < this->boardRows; i++) {
         this->gameBoard[i][0] = '*';
         this->gameBoard[i][this->boardCols - 1] = '*';
-        //this->gameBoard[i][this->boardCols - 2] = '*'; // there is some weridness on windows BASH
     }
 }
 
 /*** Global Input & Output ***/
 // input
-void processKeypress() {
+void processKeypress(tron * this) {
     
     
     int c = readKey();
@@ -166,12 +167,19 @@ void processKeypress() {
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
             break;
-        
+        case '\0':
+            // so vmin works in WSL now, and 0.1s per update is decently fast
+            if (this->gameBoard[0][0] == '*') {
+                this->gameBoard[0][0] = '@';
+            }
+            else {
+                this->gameBoard[0][0] = '*';
+            }
+            break;
         case ARROW_UP:
         case ARROW_LEFT:
         case ARROW_DOWN:
         case ARROW_RIGHT:
-            
             break;
     }
 }
@@ -192,6 +200,7 @@ void drawScreen(tron * this){
     abAppend(&ab, "\x1b[?25l", 6); //hide cursor
 
     // draw board
+    abAppend(&ab, "\x1b[H", 3);
     for (int i = 0; i < this->boardRows; i++) {
         for (int j = 0; j < this->boardCols; j++) {
             char charToPrint = this->gameBoard[i][j];
@@ -247,10 +256,15 @@ void die(const char* s) { //error handling
 int readKey(void) {
     int nread;
     char c;
-
+    /*
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if(nread == -1 && errno != EAGAIN) die("read");
     }
+    */
+    nread = read(STDIN_FILENO, &c, 1);
+    if(nread == -1 && errno != EAGAIN) die("read");
+    else if (nread != 1) return '\0';
+
     if (c == '\x1b') {
         char seq[5];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
