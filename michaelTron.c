@@ -73,6 +73,8 @@ typedef struct tron {
     int playerPosX;
     int playerPosY;
     direction playerDir;
+    int playerDirX;
+    int playerDirY;
 
     gameState curState;
 } tron;
@@ -81,8 +83,10 @@ typedef struct tron {
 void gameInit(tron * this);
 void makeBorder(tron * this);
 
+bool updatePlayerPos(tron * this);
+
 /*** Input & Output ***/
-void processKeypress(tron * this);
+void processKeypress(tron * tronGame);
 
 typedef struct abuf {
     char* b;
@@ -92,7 +96,6 @@ typedef struct abuf {
 #define ABUF_INIT {NULL, 0}
 void abAppend(struct abuf* ab, const char* s, int len);
 void abFree(struct abuf* ab) {free(ab->b);}
-
 
 void drawScreen(tron * this);
 
@@ -137,6 +140,8 @@ void gameInit(tron * this) {
     }
 
     this->playerDir = RIGHT;
+    this->playerDirX = 1;
+    this->playerDirY = 0;
     this->playerPosX = this->boardCols / 2;
     this->playerPosY = this->boardRows / 2;
 
@@ -144,6 +149,7 @@ void gameInit(tron * this) {
 }
 
 void makeBorder(tron * this) {
+    // border
     for (int i = 0; i < this->boardCols; i++) {
         this->gameBoard[0][i] = '*';
         this->gameBoard[this->boardRows - 1][i] = '*';
@@ -152,13 +158,32 @@ void makeBorder(tron * this) {
         this->gameBoard[i][0] = '*';
         this->gameBoard[i][this->boardCols - 1] = '*';
     }
+
+    // also mark player
+    this->gameBoard[this->playerPosY][this->playerPosX] = '@';
 }
 
-/*** Global Input & Output ***/
+bool updatePlayerPos(tron * this) {
+    if (this->playerPosX + this->playerDirX >= 1 &&
+        this->playerPosX + this->playerDirX <= this->boardCols - 1 &&
+        this->playerPosY + this->playerDirX >= 1 &&
+        this->playerPosY + this->playerDirX <= this->boardRows - 1) 
+        {
+        this->gameBoard[this->playerPosY][this->playerPosX] = 'B';
+        this->playerPosX += this->playerDirX;
+        this->playerPosY += this->playerDirY;
+        this->gameBoard[this->playerPosY][this->playerPosX] = '@';
+        return true;
+    }
+    else {
+        // hit wall and die
+        return false;
+    }
+}
+
+/*** Input & Output ***/
 // input
-void processKeypress(tron * this) {
-    
-    
+void processKeypress(tron * tronGame) {
     int c = readKey();
 
     switch (c) {
@@ -167,21 +192,41 @@ void processKeypress(tron * this) {
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
             break;
-        case '\0':
-            // so vmin works in WSL now, and 0.1s per update is decently fast
-            if (this->gameBoard[0][0] == '*') {
-                this->gameBoard[0][0] = '@';
-            }
-            else {
-                this->gameBoard[0][0] = '*';
+        case 'w':
+        case 'W':
+        case ARROW_UP:
+            if (tronGame->playerDirY == 0) {
+                tronGame->playerDirY = -1;
+                tronGame->playerDirX = 0;
             }
             break;
-        case ARROW_UP:
+        case 'a':
+        case 'A':
         case ARROW_LEFT:
+            if (tronGame->playerDirX == 0) {
+                tronGame->playerDirX = -1;
+                tronGame->playerDirY = 0;
+            }
+            break;
+        case 's':
+        case 'S':
         case ARROW_DOWN:
+            if (tronGame->playerDirY == 0) {
+                tronGame->playerDirY = 1;
+                tronGame->playerDirX = 0;
+            }
+            break;
+        case 'd':
+        case 'D':
         case ARROW_RIGHT:
+            if (tronGame->playerDirX == 0) {
+                tronGame->playerDirX = 1;
+                tronGame->playerDirY = 0;
+            }
             break;
     }
+
+    updatePlayerPos(tronGame);
 }
 
 
@@ -204,10 +249,24 @@ void drawScreen(tron * this){
     for (int i = 0; i < this->boardRows; i++) {
         for (int j = 0; j < this->boardCols; j++) {
             char charToPrint = this->gameBoard[i][j];
-            abAppend(&ab, &charToPrint, 1);
+            switch (charToPrint) {
+                case '@':
+                    abAppend(&ab, "\x1b[36m", 5); // cyan
+                    abAppend(&ab, &charToPrint, 1);
+                    abAppend(&ab, "\x1b[m", 3);
+                    break;
+                case 'B':
+                    abAppend(&ab, "\x1b[7;36m", 7);
+                    abAppend(&ab, " ", 1);
+                    abAppend(&ab, "\x1b[m", 3);
+                    break;
+                default:
+                    abAppend(&ab, &charToPrint, 1);
+                    break;
+            }
         }
         
-        abAppend(&ab, "\x1b[K", 3);  // clear line right of cursor
+        abAppend(&ab, "\x1b[K", 3);  // clear line right of cursor (optional in our case)
         if (i != this->boardRows - 1) {
             abAppend(&ab, "\r\n", 2);
         }
