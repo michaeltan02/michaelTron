@@ -17,7 +17,6 @@
 #include <stdarg.h>
 #include <fcntl.h>
 
-
 /*** Definitions ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MICHAEL_TRON_VER "0.3"
@@ -176,11 +175,16 @@ bool updatePlayerPos(tron * this) {
         && nextPosY >= 1 && nextPosY <= this->boardRows - 2) {
         // moving
         char nextPosChar = this->gameBoard[nextPosY][nextPosX];
-        if (nextPosChar != '*' && nextPosChar != 'B' && nextPosChar != 'Y') { // also need to check if enemy player will move inot same pos
+        if (nextPosChar != '*' && nextPosChar != 'B' && nextPosChar != 'Y' && nextPosChar != 'E') { // also need to check if enemy player will move inot same pos
             this->gameBoard[this->playerPosY][this->playerPosX] = 'B';
             this->playerPosX += this->playerDirX;
             this->playerPosY += this->playerDirY;
             this->gameBoard[this->playerPosY][this->playerPosX] = '@';
+
+            // This artifically slow down vertical movement speed
+            if (this->playerDirY != 0) {
+                usleep(60000); // sleep in microscedon
+            }
             return true;
         }
     }
