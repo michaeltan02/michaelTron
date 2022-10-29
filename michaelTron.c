@@ -20,7 +20,7 @@
 
 /*** Definitions ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
-#define MICHAEL_TRON_VER "0.1"
+#define MICHAEL_TRON_VER "0.3"
 
 enum keys {
     BACKSPACE = 127,
@@ -52,17 +52,10 @@ enum keys {
 };
 
 /*** Tron Variables ***/
-typedef enum direction {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT
-} direction;
-
 typedef enum gameState {
     START_SCREEN,
     IN_GAME,
-    LOST
+    DEATH_SCREEN
 } gameState;
 
 typedef struct tron {
@@ -72,7 +65,6 @@ typedef struct tron {
     
     int playerPosX;
     int playerPosY;
-    direction playerDir;
     int playerDirX;
     int playerDirY;
 
@@ -81,6 +73,7 @@ typedef struct tron {
 
 /*** Tron Functions ***/
 void gameInit(tron * this);
+void gameStart(tron * this);
 void makeBorder(tron * this);
 
 bool updatePlayerPos(tron * this);
@@ -115,7 +108,7 @@ int main() {
 
     tron tronGame;
     gameInit(&tronGame);
-    makeBorder(&tronGame);
+    //gameStart(&tronGame);
 
     while (1) {
         drawScreen(&tronGame);
@@ -132,6 +125,7 @@ void gameInit(tron * this) {
     }
 
     this->boardCols--; // this is just cuz WSL seem to overreport by one col
+    this->boardRows--; // leave space for instructions
 
     this->gameBoard = (char **) malloc(sizeof(char *) * this->boardRows);
     for (int i = 0; i < this->boardRows; i++) {
@@ -139,13 +133,27 @@ void gameInit(tron * this) {
         memset(this->gameBoard[i], ' ', this->boardCols);
     }
 
-    this->playerDir = RIGHT;
+    this->playerDirX = 0;
+    this->playerDirY = 0;
+    this->playerPosX = this->boardCols / 2;
+    this->playerPosY = this->boardRows / 2;
+
+    this->curState = START_SCREEN;
+}
+
+void gameStart(tron * this) {
     this->playerDirX = 1;
     this->playerDirY = 0;
     this->playerPosX = this->boardCols / 2;
     this->playerPosY = this->boardRows / 2;
 
     this->curState = IN_GAME;
+
+    for (int i = 0; i < this->boardRows; i++) {
+        memset(this->gameBoard[i], ' ', this->boardCols);
+    }
+    makeBorder(this);
+    this->gameBoard[this->playerPosY][this->playerPosX] = '@';
 }
 
 void makeBorder(tron * this) {
@@ -158,27 +166,30 @@ void makeBorder(tron * this) {
         this->gameBoard[i][0] = '*';
         this->gameBoard[i][this->boardCols - 1] = '*';
     }
-
-    // also mark player
-    this->gameBoard[this->playerPosY][this->playerPosX] = '@';
 }
 
 bool updatePlayerPos(tron * this) {
-    if (this->playerPosX + this->playerDirX >= 1 &&
-        this->playerPosX + this->playerDirX <= this->boardCols - 1 &&
-        this->playerPosY + this->playerDirX >= 1 &&
-        this->playerPosY + this->playerDirX <= this->boardRows - 1) 
-        {
-        this->gameBoard[this->playerPosY][this->playerPosX] = 'B';
-        this->playerPosX += this->playerDirX;
-        this->playerPosY += this->playerDirY;
-        this->gameBoard[this->playerPosY][this->playerPosX] = '@';
-        return true;
+    int nextPosX = this->playerPosX + this->playerDirX;
+    int nextPosY = this->playerPosY + this->playerDirY;
+    // check for border wall
+    if (nextPosX >= 1 && nextPosX <= this->boardCols - 2
+        && nextPosY >= 1 && nextPosY <= this->boardRows - 2) {
+        // moving
+        char nextPosChar = this->gameBoard[nextPosY][nextPosX];
+        if (nextPosChar != '*' && nextPosChar != 'B' && nextPosChar != 'Y') { // also need to check if enemy player will move inot same pos
+            this->gameBoard[this->playerPosY][this->playerPosX] = 'B';
+            this->playerPosX += this->playerDirX;
+            this->playerPosY += this->playerDirY;
+            this->gameBoard[this->playerPosY][this->playerPosX] = '@';
+            return true;
+        }
     }
-    else {
-        // hit wall and die
-        return false;
-    }
+     
+    // Only get here if hit wall and die
+    this->curState = DEATH_SCREEN;
+    this->playerDirX = 0;
+    this->playerDirY = 0;
+    return false;
 }
 
 /*** Input & Output ***/
@@ -192,10 +203,15 @@ void processKeypress(tron * tronGame) {
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
             break;
+        case ' ':
+            if (tronGame->curState != IN_GAME) {
+                gameStart(tronGame);
+            }
+            break;
         case 'w':
         case 'W':
         case ARROW_UP:
-            if (tronGame->playerDirY == 0) {
+            if (tronGame->curState == IN_GAME && tronGame->playerDirY == 0) {
                 tronGame->playerDirY = -1;
                 tronGame->playerDirX = 0;
             }
@@ -203,7 +219,7 @@ void processKeypress(tron * tronGame) {
         case 'a':
         case 'A':
         case ARROW_LEFT:
-            if (tronGame->playerDirX == 0) {
+            if (tronGame->curState == IN_GAME && tronGame->playerDirX == 0) {
                 tronGame->playerDirX = -1;
                 tronGame->playerDirY = 0;
             }
@@ -211,7 +227,7 @@ void processKeypress(tron * tronGame) {
         case 's':
         case 'S':
         case ARROW_DOWN:
-            if (tronGame->playerDirY == 0) {
+            if (tronGame->curState == IN_GAME && tronGame->playerDirY == 0) {
                 tronGame->playerDirY = 1;
                 tronGame->playerDirX = 0;
             }
@@ -219,16 +235,17 @@ void processKeypress(tron * tronGame) {
         case 'd':
         case 'D':
         case ARROW_RIGHT:
-            if (tronGame->playerDirX == 0) {
+            if (tronGame->curState == IN_GAME && tronGame->playerDirX == 0) {
                 tronGame->playerDirX = 1;
                 tronGame->playerDirY = 0;
             }
+            break;
+        case '\0':
             break;
     }
 
     updatePlayerPos(tronGame);
 }
-
 
 // output
 void abAppend(struct abuf * ab, const char * s, int len) {
@@ -251,8 +268,8 @@ void drawScreen(tron * this){
             char charToPrint = this->gameBoard[i][j];
             switch (charToPrint) {
                 case '@':
-                    abAppend(&ab, "\x1b[36m", 5); // cyan
-                    abAppend(&ab, &charToPrint, 1);
+                    abAppend(&ab, this->curState == DEATH_SCREEN ? "\x1b[31m" : "\x1b[36m", 5); // cyan
+                    abAppend(&ab, this->curState == DEATH_SCREEN ? "X" : "@", 1);
                     abAppend(&ab, "\x1b[m", 3);
                     break;
                 case 'B':
@@ -265,12 +282,35 @@ void drawScreen(tron * this){
                     break;
             }
         }
+
+        // Potential message overlay
+        if (this->curState != IN_GAME && i == this->boardRows / 3) {
+            abAppend(&ab, "\r", 1);
+            char message[80];
+            int msgLen = 0;
+            if (this->curState == START_SCREEN) {
+                msgLen = snprintf(message, sizeof(message), "Michael's Tron -- ver %s (press space to start)", MICHAEL_TRON_VER);
+            }
+            else if (this->curState == DEATH_SCREEN) {
+                msgLen = snprintf(message, sizeof(message), "\x1b[31mYOU DIED \x1b[0m (press space to restart)");
+            }
+            
+            int padding = (this->boardCols - msgLen) / 2;
+            for (int z = padding; z > 0; z--) abAppend(&ab, " ", 1);
+
+            if (msgLen > this->boardCols) msgLen = this->boardCols;
+            abAppend(&ab, message, msgLen);
+        }
         
         abAppend(&ab, "\x1b[K", 3);  // clear line right of cursor (optional in our case)
-        if (i != this->boardRows - 1) {
-            abAppend(&ab, "\r\n", 2);
-        }
+        abAppend(&ab, "\r\n", 2);
     }
+    // Instructions
+    abAppend(&ab, "\x1b[7m", 4); // invert color
+    char * instruction = "WASD/Arrow keys to move | Ctrl-Q to quit | Hold any key to accerlate";
+    int instLen = strlen(instruction);
+    abAppend(&ab, instruction, instLen > this->boardCols ? this->boardCols : instLen);
+    abAppend(&ab, "\x1b[m", 3); // invert color
 
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
@@ -315,11 +355,7 @@ void die(const char* s) { //error handling
 int readKey(void) {
     int nread;
     char c;
-    /*
-    while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-        if(nread == -1 && errno != EAGAIN) die("read");
-    }
-    */
+
     nread = read(STDIN_FILENO, &c, 1);
     if(nread == -1 && errno != EAGAIN) die("read");
     else if (nread != 1) return '\0';
@@ -437,7 +473,7 @@ int getCursorPosition(int* rows, int* cols) {
         if (buf[i] == 'R') break;
     }
     buf[i] = '\0';
-    //printf("\r\n%s\r\n", &buf[1]);
+
     if (buf[0] != '\x1b' || buf[1] != '[') return -1;
     if (sscanf(&buf[2], "%d;%d", rows, cols) !=2) return -1;
 }
