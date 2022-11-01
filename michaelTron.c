@@ -269,6 +269,11 @@ void processKeypress(tron * tronGame) {
                 gameStart(tronGame);
             }
             break;
+        case ' ':
+            if (tronGame->curState != IN_GAME) {
+                gameStart(tronGame);
+            }
+            break;
         case 'w':
         case 'W':
             if (tronGame->curState == IN_GAME && tronGame->player1.dirY == 0) {
