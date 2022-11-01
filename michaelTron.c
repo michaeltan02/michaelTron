@@ -54,20 +54,31 @@ enum keys {
 typedef enum gameState {
     START_SCREEN,
     IN_GAME,
-    DEATH_SCREEN
+    DEATH_SCREEN,
+    PLAYER1_WIN,
+    PLAYER2_WIN,
+    DRAW
 } gameState;
+
+typedef struct lightCycle {
+    int posX;
+    int posY;
+    int dirX;
+    int dirY;
+    bool alive;
+} lightCycle;
 
 typedef struct tron {
     char ** gameBoard;
     int boardRows;
     int boardCols;
     
-    int playerPosX;
-    int playerPosY;
-    int playerDirX;
-    int playerDirY;
+    lightCycle player1;
+    lightCycle player2;
 
     gameState curState;
+    
+    bool singlePlayer;
 } tron;
 
 /*** Tron Functions ***/
@@ -75,7 +86,9 @@ void gameInit(tron * this);
 void gameStart(tron * this);
 void makeBorder(tron * this);
 
-bool updatePlayerPos(tron * this);
+bool updateCyclePos(tron * this, int playerNum);
+void computerMakeMove(tron* this);
+void deathHandler(tron* this);
 
 /*** Input & Output ***/
 void processKeypress(tron * tronGame);
@@ -107,7 +120,6 @@ int main() {
 
     tron tronGame;
     gameInit(&tronGame);
-    //gameStart(&tronGame);
 
     while (1) {
         drawScreen(&tronGame);
@@ -131,20 +143,35 @@ void gameInit(tron * this) {
         this->gameBoard[i] = (char *) malloc(this->boardCols);
         memset(this->gameBoard[i], ' ', this->boardCols);
     }
+    
+    this->player1.dirX = 0;
+    this->player1.dirY = 0;
+    this->player1.posX = this->boardCols * 1 / 3;
+    this->player1.posY = this->boardRows / 2;
+    this->player1.alive = true;
 
-    this->playerDirX = 0;
-    this->playerDirY = 0;
-    this->playerPosX = this->boardCols / 2;
-    this->playerPosY = this->boardRows / 2;
+    this->player2.dirX = 0;
+    this->player2.dirY = 0;
+    this->player2.posX = this->boardCols * 2 / 3;
+    this->player2.posY = this->boardRows / 2;
+    this->player2.alive = true;
 
     this->curState = START_SCREEN;
+    this->singlePlayer = false;
 }
 
 void gameStart(tron * this) {
-    this->playerDirX = 1;
-    this->playerDirY = 0;
-    this->playerPosX = this->boardCols / 2;
-    this->playerPosY = this->boardRows / 2;
+    this->player1.dirX = 1;
+    this->player1.dirY = 0;
+    this->player1.posX = this->boardCols * 1 / 3;
+    this->player1.posY = this->boardRows / 2;
+    this->player1.alive = true;
+
+    this->player2.dirX = -1;
+    this->player2.dirY = 0;
+    this->player2.posX = this->boardCols * 2 / 3;
+    this->player2.posY = this->boardRows / 2;
+    this->player2.alive = true;
 
     this->curState = IN_GAME;
 
@@ -152,7 +179,8 @@ void gameStart(tron * this) {
         memset(this->gameBoard[i], ' ', this->boardCols);
     }
     makeBorder(this);
-    this->gameBoard[this->playerPosY][this->playerPosX] = '@';
+    this->gameBoard[this->player1.posY][this->player1.posX] = '1';
+    this->gameBoard[this->player2.posY][this->player2.posX] = '2';
 }
 
 void makeBorder(tron * this) {
@@ -167,33 +195,57 @@ void makeBorder(tron * this) {
     }
 }
 
-bool updatePlayerPos(tron * this) {
-    int nextPosX = this->playerPosX + this->playerDirX;
-    int nextPosY = this->playerPosY + this->playerDirY;
+bool updateCyclePos(tron * this, int playerNum) {
+    lightCycle * cycle = playerNum == 1 ? &this->player1 : &this->player2;
+    
+    int nextPosX = cycle->posX + cycle->dirX;
+    int nextPosY = cycle->posY + cycle->dirY;
     // check for border wall
     if (nextPosX >= 1 && nextPosX <= this->boardCols - 2
         && nextPosY >= 1 && nextPosY <= this->boardRows - 2) {
         // moving
         char nextPosChar = this->gameBoard[nextPosY][nextPosX];
-        if (nextPosChar != '*' && nextPosChar != 'B' && nextPosChar != 'Y' && nextPosChar != 'E') { // also need to check if enemy player will move inot same pos
-            this->gameBoard[this->playerPosY][this->playerPosX] = 'B';
-            this->playerPosX += this->playerDirX;
-            this->playerPosY += this->playerDirY;
-            this->gameBoard[this->playerPosY][this->playerPosX] = '@';
-
-            // This artifically slow down vertical movement speed
-            if (this->playerDirY != 0) {
-                usleep(60000); // sleep in microscedon
-            }
+        if (nextPosChar != '*' && nextPosChar != 'B' && nextPosChar != 'Y') { // allow 2 cycle to go into same pos here. Will check for draw later
+            this->gameBoard[cycle->posY][cycle->posX] = playerNum == 1 ? 'B' : 'Y';
+            cycle->posX += cycle->dirX;
+            cycle->posY += cycle->dirY;
+            this->gameBoard[cycle->posY][cycle->posX] = playerNum == 1 ? '1' : '2';
             return true;
         }
     }
      
-    // Only get here if hit wall and die
-    this->curState = DEATH_SCREEN;
-    this->playerDirX = 0;
-    this->playerDirY = 0;
+    // Only get here if a cycle hit wall and die
+    cycle->alive = false;
     return false;
+}
+
+void deathHandler(tron* this) {
+    lightCycle * one = &this->player1;
+    lightCycle * two = &this->player2;
+
+    if (one->alive && two->alive) return;
+
+    one->dirX = 0;
+    one->dirY = 0;
+    two->dirX = 0;
+    two->dirY = 0;
+
+    if (!one->alive && !two->alive) {
+        this->curState = DRAW;
+        return;
+    }
+    if (one->alive && !two->alive) {
+        this->curState = PLAYER1_WIN;
+        return;
+    }
+    if (!one->alive && two->alive) {
+        this->curState = PLAYER2_WIN;
+        return;
+    }
+}
+
+void computerMakeMove(tron * this) {
+    return;
 }
 
 /*** Input & Output ***/
@@ -201,11 +253,20 @@ bool updatePlayerPos(tron * this) {
 void processKeypress(tron * tronGame) {
     int c = readKey();
 
+    computerMakeMove(tronGame);
+
     switch (c) {
         case CTRL_KEY('q'):
             write(STDOUT_FILENO, "\x1b[2J", 4); 
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
+            break;
+        case '1':
+        case '2':
+            if (tronGame->curState != IN_GAME) {
+                tronGame->singlePlayer = c == '1' ? true : false;
+                gameStart(tronGame);
+            }
             break;
         case ' ':
             if (tronGame->curState != IN_GAME) {
@@ -214,41 +275,79 @@ void processKeypress(tron * tronGame) {
             break;
         case 'w':
         case 'W':
-        case ARROW_UP:
-            if (tronGame->curState == IN_GAME && tronGame->playerDirY == 0) {
-                tronGame->playerDirY = -1;
-                tronGame->playerDirX = 0;
+            if (tronGame->curState == IN_GAME && tronGame->player1.dirY == 0) {
+                tronGame->player1.dirY = -1;
+                tronGame->player1.dirX = 0;
             }
             break;
         case 'a':
         case 'A':
-        case ARROW_LEFT:
-            if (tronGame->curState == IN_GAME && tronGame->playerDirX == 0) {
-                tronGame->playerDirX = -1;
-                tronGame->playerDirY = 0;
+            if (tronGame->curState == IN_GAME && tronGame->player1.dirX == 0) {
+                tronGame->player1.dirX = -1;
+                tronGame->player1.dirY = 0;
             }
             break;
         case 's':
         case 'S':
-        case ARROW_DOWN:
-            if (tronGame->curState == IN_GAME && tronGame->playerDirY == 0) {
-                tronGame->playerDirY = 1;
-                tronGame->playerDirX = 0;
+            if (tronGame->curState == IN_GAME && tronGame->player1.dirY == 0) {
+                tronGame->player1.dirY = 1;
+                tronGame->player1.dirX = 0;
             }
             break;
         case 'd':
         case 'D':
+            if (tronGame->curState == IN_GAME && tronGame->player1.dirX == 0) {
+                tronGame->player1.dirX = 1;
+                tronGame->player1.dirY = 0;
+            }
+            break;
+        case ARROW_UP:
+            if (tronGame->curState == IN_GAME && !tronGame->singlePlayer && tronGame->player2.dirY == 0) {
+                tronGame->player2.dirY = -1;
+                tronGame->player2.dirX = 0;
+            }
+            break;
+        case ARROW_LEFT:
+            if (tronGame->curState == IN_GAME && !tronGame->singlePlayer && tronGame->player2.dirX == 0) {
+                tronGame->player2.dirX = -1;
+                tronGame->player2.dirY = 0;
+            }
+            break;
+        case ARROW_DOWN:
+            if (tronGame->curState == IN_GAME && !tronGame->singlePlayer && tronGame->player2.dirY == 0) {
+                tronGame->player2.dirY = 1;
+                tronGame->player2.dirX = 0;
+            }
+            break;
         case ARROW_RIGHT:
-            if (tronGame->curState == IN_GAME && tronGame->playerDirX == 0) {
-                tronGame->playerDirX = 1;
-                tronGame->playerDirY = 0;
+            if (tronGame->curState == IN_GAME && !tronGame->singlePlayer && tronGame->player2.dirX == 0) {
+                tronGame->player2.dirX = 1;
+                tronGame->player2.dirY = 0;
             }
             break;
         case '\0':
             break;
     }
 
-    updatePlayerPos(tronGame);
+    updateCyclePos(tronGame, 1);
+    updateCyclePos(tronGame, 2);
+    
+    // check if player2's movement kill player 1/both
+    int player1PosX = tronGame->player1.posX;
+    int player1PosY = tronGame->player1.posY;
+    if (player1PosX >= 1 && player1PosX <= tronGame->boardCols - 2
+        && player1PosY >= 1 && player1PosY <= tronGame->boardRows - 2) { // make sure we don't get a seg fault
+        char player1Char = tronGame->gameBoard[player1PosY][player1PosX];
+        if (player1Char == '2') { // simultaenously ran into same pos
+            tronGame->player1.alive = false;
+            tronGame->player2.alive = false;
+        }
+        else if (player1Char == 'Y') {
+            tronGame->player1.alive = false;
+        }
+    }
+
+    deathHandler(tronGame);
 }
 
 // output
@@ -271,13 +370,23 @@ void drawScreen(tron * this){
         for (int j = 0; j < this->boardCols; j++) {
             char charToPrint = this->gameBoard[i][j];
             switch (charToPrint) {
-                case '@':
-                    abAppend(&ab, this->curState == DEATH_SCREEN ? "\x1b[31m" : "\x1b[36m", 5); // cyan
-                    abAppend(&ab, this->curState == DEATH_SCREEN ? "X" : "@", 1);
+                case '1':
+                    abAppend(&ab, this->player1.alive ? "\x1b[36m" : "\x1b[31m", 5); // cyan
+                    abAppend(&ab, this->player1.alive ? "1" : "X", 1);
                     abAppend(&ab, "\x1b[m", 3);
                     break;
                 case 'B':
                     abAppend(&ab, "\x1b[7;36m", 7);
+                    abAppend(&ab, " ", 1);
+                    abAppend(&ab, "\x1b[m", 3);
+                    break;
+                case '2':
+                    abAppend(&ab, this->player2.alive ? "\x1b[33m" : "\x1b[31m", 5); // yellow
+                    abAppend(&ab, this->player2.alive ? "2" : "X", 1);
+                    abAppend(&ab, "\x1b[m", 3);
+                    break;
+                case 'Y':
+                    abAppend(&ab, "\x1b[7;33m", 7);
                     abAppend(&ab, " ", 1);
                     abAppend(&ab, "\x1b[m", 3);
                     break;
@@ -292,11 +401,19 @@ void drawScreen(tron * this){
             abAppend(&ab, "\r", 1);
             char message[80];
             int msgLen = 0;
-            if (this->curState == START_SCREEN) {
-                msgLen = snprintf(message, sizeof(message), "Michael's Tron -- ver %s (press space to start)", MICHAEL_TRON_VER);
-            }
-            else if (this->curState == DEATH_SCREEN) {
-                msgLen = snprintf(message, sizeof(message), "\x1b[31mYOU DIED \x1b[0m (press space to restart)");
+            switch (this->curState) {
+                case START_SCREEN:
+                    msgLen = snprintf(message, sizeof(message), "Michael's Tron -- ver %s(start by pressing 1/2 to select # of player)", MICHAEL_TRON_VER);
+                    break;
+                case PLAYER1_WIN:
+                    msgLen = snprintf(message, sizeof(message), "\x1b[36mPlayer 1 Win \x1b[0m(restart by pressing 1/2 to select # of player)");
+                    break;
+                case PLAYER2_WIN:
+                    msgLen = snprintf(message, sizeof(message), "\x1b[33mPlayer 2 Win \x1b[0m(restart by pressing 1/2 to select # of player)");
+                    break;
+                case DRAW:
+                    msgLen = snprintf(message, sizeof(message), "\x1b[32mDraw \x1b[0m(restart by pressing 1/2 to select # of player)");
+                    break;
             }
             
             int padding = (this->boardCols - msgLen) / 2;
