@@ -55,7 +55,6 @@ enum keys {
 typedef enum gameState {
     START_SCREEN,
     IN_GAME,
-    DEATH_SCREEN,
     PLAYER1_WIN,
     PLAYER2_WIN,
     DRAW
@@ -90,6 +89,7 @@ void makeBorder(tron * this);
 bool updateCyclePos(tron * this, int playerNum);
 void computerMakeMove(tron* this);
 void deathHandler(tron* this);
+bool crashChecker(int nextX, int nextY, tron * this);
 
 /*** Input & Output ***/
 void processKeypress(tron * tronGame);
@@ -246,7 +246,121 @@ void deathHandler(tron* this) {
 }
 
 void computerMakeMove(tron * this) {
+    // find destination
+    int destX = this->player1.posX + 4 * this->player1.dirX;
+    if (destX < 1) destX = 1;
+    if (destX > this->boardCols - 2) destX = this->boardCols - 2;
+    
+    int destY = this->player1.posY + 2 * this->player1.dirY;
+    if (destY < 1) destY = 1;
+    if (destY > this->boardRows - 2) destY = this->boardRows - 2;
+
+    lightCycle * computer = &this->player2;
+    // try all direction. First check if no death, then minimize distance to destination
+    // not moving
+    int nextX = computer->posX + computer->dirX;
+    int nextY = computer->posY + computer->dirY;
+    int bestDistance = abs(destX - nextX) + abs(destY - nextY);
+    int potentialDistance;
+    bool gonnaCrash = crashChecker(nextX, nextY, this);
+    bool potentialCrash;
+
+    int ogdirX = computer->dirX;
+    int ogdirY = computer->dirY;
+    // test up
+    if (ogdirY == 0) {
+        nextX = computer->posX;
+        nextY = computer->posY - 1;
+        potentialDistance = abs(destX - nextX) + abs(destY - nextY);
+        potentialCrash = crashChecker(nextX, nextY, this);
+
+        if (gonnaCrash && !potentialCrash) {
+            gonnaCrash = false;
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = -1;
+        }
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = -1;
+        }
+    }
+    // test down
+    if (ogdirY == 0) {
+        nextX = computer->posX;
+        nextY = computer->posY + 1;
+        potentialDistance = abs(destX - nextX) + abs(destY - nextY);
+        potentialCrash = crashChecker(nextX, nextY, this);
+
+        if (gonnaCrash && !potentialCrash) {
+            gonnaCrash = false;
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = 1;
+        }
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = 1;
+        }
+    }
+    // test left
+    if (ogdirX == 0) {
+        nextX = computer->posX - 1;
+        nextY = computer->posY;
+        potentialDistance = abs(destX - nextX) + abs(destY - nextY);
+        potentialCrash = crashChecker(nextX, nextY, this);
+
+        if (gonnaCrash && !potentialCrash) {
+            gonnaCrash = false;
+            bestDistance = potentialDistance;
+            computer->dirX = -1;
+            computer->dirY = 0;
+        }
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = -1;
+            computer->dirY = 0;
+        }
+    }
+    // test right
+    if (ogdirX == 0) {
+        nextX = computer->posX + 1;
+        nextY = computer->posY;
+        potentialDistance = abs(destX - nextX) + abs(destY - nextY);
+        potentialCrash = crashChecker(nextX, nextY, this);
+
+        if (gonnaCrash && !potentialCrash) {
+            gonnaCrash = false;
+            bestDistance = potentialDistance;
+            computer->dirX = 1;
+            computer->dirY = 0;
+        }
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 1;
+            computer->dirY = 0;
+        }
+    }
+
     return;
+}
+
+bool crashChecker(int nextX, int nextY, tron * this) {
+    if (nextX >= 1 && nextX <= this->boardCols - 2
+        && nextX >= 1 && nextY <= this->boardRows - 2) { // make sure we don't get a seg fault
+        char nextChar = this->gameBoard[nextY][nextX];
+        if (nextChar == 'B' || nextChar == 'Y' || nextChar == '*' || nextChar == '1' || nextChar == '2') {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return true;
+    }
 }
 
 /*** Input & Output ***/
@@ -254,7 +368,9 @@ void computerMakeMove(tron * this) {
 void processKeypress(tron * tronGame) {
     int c = readKey();
 
-    computerMakeMove(tronGame);
+    if (tronGame->curState == IN_GAME && tronGame->singlePlayer) {
+        computerMakeMove(tronGame);
+    }
 
     switch (c) {
         case CTRL_KEY('q'):
@@ -429,7 +545,8 @@ void drawScreen(tron * this){
     }
     // Instructions
     abAppend(&ab, "\x1b[7m", 4); // invert color
-    char * instruction = "WASD/Arrow keys to move | Ctrl-Q to quit | Hold any key to accerlate";
+    char * instruction = this->singlePlayer? "Player 1: WASD | Player 2: Computer | Ctrl-Q to quit" : 
+                                                "Player 1: WASD | Player2: Arrow keys | Ctrl-Q to quit";
     int instLen = strlen(instruction);
     abAppend(&ab, instruction, instLen > this->boardCols ? this->boardCols : instLen);
     abAppend(&ab, "\x1b[m", 3); // invert color
