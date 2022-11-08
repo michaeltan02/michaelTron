@@ -16,10 +16,11 @@
 #include <time.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <time.h>
 
 /*** Definitions ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
-#define MICHAEL_TRON_VER "0.3"
+#define MICHAEL_TRON_VER "0.7"
 
 enum keys {
     BACKSPACE = 127,
@@ -78,6 +79,7 @@ typedef struct tron {
     gameState curState;
     
     bool singlePlayer;
+    int numTurn;
 } tron;
 
 /*** Tron Functions ***/
@@ -117,6 +119,9 @@ struct termios orig_termio;
 
 int main() {
     enableRawMode();
+
+    time_t t;
+    srand((unsigned) time(&t));
 
     tron tronGame;
     gameInit(&tronGame);
@@ -158,6 +163,7 @@ void gameInit(tron * this) {
 
     this->curState = START_SCREEN;
     this->singlePlayer = false;
+    this->numTurn = 0;
 }
 
 void gameStart(tron * this) {
@@ -174,6 +180,7 @@ void gameStart(tron * this) {
     this->player2.alive = true;
 
     this->curState = IN_GAME;
+    this->numTurn = 0;
 
     for (int i = 0; i < this->boardRows; i++) {
         memset(this->gameBoard[i], ' ', this->boardCols);
@@ -245,6 +252,21 @@ void deathHandler(tron* this) {
 }
 
 void computerMakeMove(tron * this) {
+    // generate random number and decide objective (chase or run away)
+    bool chaseTrueRunFalse = this->numTurn > 50 ? true : false;
+    static int randomNumber = 5;
+    if (this->numTurn % 10 == 0) {
+        randomNumber = rand() % 10 + 1; // this should given random number 1 -> 10
+    }
+    // note that this randomness sometimes cause the comptuer to just kill it self
+    // maybe only update the random number every few turns?
+    if (this->numTurn < 50) {
+        chaseTrueRunFalse = randomNumber > 7 ? true : false;
+    }
+    else {
+        chaseTrueRunFalse = randomNumber > 3 ? true : false;
+    }
+
     // find destination
     int destX = this->player1.posX + 4 * this->player1.dirX;
     if (destX < 1) destX = 1;
@@ -273,17 +295,24 @@ void computerMakeMove(tron * this) {
         potentialDistance = abs(destX - nextX) + abs(destY - nextY);
         potentialCrash = crashChecker(nextX, nextY, this);
 
+        bool turn = false;
         if (gonnaCrash && !potentialCrash) {
             gonnaCrash = false;
             bestDistance = potentialDistance;
             computer->dirX = 0;
             computer->dirY = -1;
         }
-        else if (!potentialCrash && potentialDistance < bestDistance) {
+        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
             bestDistance = potentialDistance;
             computer->dirX = 0;
             computer->dirY = -1;
         }
+        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = -1;
+        }
+        
     }
     // test down
     if (ogdirY == 0) {
@@ -298,7 +327,12 @@ void computerMakeMove(tron * this) {
             computer->dirX = 0;
             computer->dirY = 1;
         }
-        else if (!potentialCrash && potentialDistance < bestDistance) {
+        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 0;
+            computer->dirY = 1;
+        }
+        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
             bestDistance = potentialDistance;
             computer->dirX = 0;
             computer->dirY = 1;
@@ -317,7 +351,12 @@ void computerMakeMove(tron * this) {
             computer->dirX = -1;
             computer->dirY = 0;
         }
-        else if (!potentialCrash && potentialDistance < bestDistance) {
+        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = -1;
+            computer->dirY = 0;
+        }
+        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
             bestDistance = potentialDistance;
             computer->dirX = -1;
             computer->dirY = 0;
@@ -336,13 +375,19 @@ void computerMakeMove(tron * this) {
             computer->dirX = 1;
             computer->dirY = 0;
         }
-        else if (!potentialCrash && potentialDistance < bestDistance) {
+        else if (!potentialCrash &&  chaseTrueRunFalse && potentialDistance < bestDistance) {
             bestDistance = potentialDistance;
             computer->dirX = 1;
             computer->dirY = 0;
         }
+        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
+            bestDistance = potentialDistance;
+            computer->dirX = 1;
+            computer->dirY = 0;
+        }
+        
     }
-
+    
     return;
 }
 
@@ -369,6 +414,7 @@ void processKeypress(tron * tronGame) {
 
     if (tronGame->curState == IN_GAME && tronGame->singlePlayer) {
         computerMakeMove(tronGame);
+        tronGame->numTurn++;
     }
 
     switch (c) {
