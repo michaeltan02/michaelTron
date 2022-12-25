@@ -252,21 +252,6 @@ void deathHandler(tron* this) {
 }
 
 void computerMakeMove(tron * this) {
-    // generate random number and decide objective (chase or run away)
-    bool chaseTrueRunFalse = this->numTurn > 50 ? true : false;
-    static int randomNumber = 5;
-    if (this->numTurn % 10 == 0) {
-        randomNumber = rand() % 10 + 1; // this should given random number 1 -> 10
-    }
-    // note that this randomness sometimes cause the comptuer to just kill it self
-    // maybe only update the random number every few turns?
-    if (this->numTurn < 50) {
-        chaseTrueRunFalse = randomNumber > 7 ? true : false;
-    }
-    else {
-        chaseTrueRunFalse = randomNumber > 3 ? true : false;
-    }
-
     // find destination
     int destX = this->player1.posX + 4 * this->player1.dirX;
     if (destX < 1) destX = 1;
@@ -278,7 +263,7 @@ void computerMakeMove(tron * this) {
 
     lightCycle * computer = &this->player2;
     // try all direction. First check if no death, then minimize distance to destination
-    // not moving
+    // default is not turning
     int nextX = computer->posX + computer->dirX;
     int nextY = computer->posY + computer->dirY;
     int bestDistance = abs(destX - nextX) + abs(destY - nextY);
@@ -288,6 +273,7 @@ void computerMakeMove(tron * this) {
 
     int ogdirX = computer->dirX;
     int ogdirY = computer->dirY;
+
     // test up
     if (ogdirY == 0) {
         nextX = computer->posX;
@@ -295,24 +281,20 @@ void computerMakeMove(tron * this) {
         potentialDistance = abs(destX - nextX) + abs(destY - nextY);
         potentialCrash = crashChecker(nextX, nextY, this);
 
-        bool turn = false;
+        bool turnUp = false;
         if (gonnaCrash && !potentialCrash) {
-            gonnaCrash = false;
+            turnUp = true;
+        }
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            turnUp = true;
+        }
+
+        if (turnUp) {
+            gonnaCrash = potentialCrash;
             bestDistance = potentialDistance;
             computer->dirX = 0;
             computer->dirY = -1;
         }
-        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = 0;
-            computer->dirY = -1;
-        }
-        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = 0;
-            computer->dirY = -1;
-        }
-        
     }
     // test down
     if (ogdirY == 0) {
@@ -321,18 +303,16 @@ void computerMakeMove(tron * this) {
         potentialDistance = abs(destX - nextX) + abs(destY - nextY);
         potentialCrash = crashChecker(nextX, nextY, this);
 
+        bool turnDown = false;
         if (gonnaCrash && !potentialCrash) {
-            gonnaCrash = false;
-            bestDistance = potentialDistance;
-            computer->dirX = 0;
-            computer->dirY = 1;
+            turnDown = true;
         }
-        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = 0;
-            computer->dirY = 1;
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            turnDown = true;
         }
-        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
+
+        if (turnDown) {
+            gonnaCrash = potentialCrash;
             bestDistance = potentialDistance;
             computer->dirX = 0;
             computer->dirY = 1;
@@ -345,18 +325,16 @@ void computerMakeMove(tron * this) {
         potentialDistance = abs(destX - nextX) + abs(destY - nextY);
         potentialCrash = crashChecker(nextX, nextY, this);
 
+        bool turnLeft = false;
         if (gonnaCrash && !potentialCrash) {
-            gonnaCrash = false;
-            bestDistance = potentialDistance;
-            computer->dirX = -1;
-            computer->dirY = 0;
+            turnLeft = true;
         }
-        else if (!potentialCrash && chaseTrueRunFalse && potentialDistance < bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = -1;
-            computer->dirY = 0;
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            turnLeft = true;
         }
-        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
+
+        if (turnLeft) {
+            gonnaCrash = potentialCrash;
             bestDistance = potentialDistance;
             computer->dirX = -1;
             computer->dirY = 0;
@@ -369,23 +347,20 @@ void computerMakeMove(tron * this) {
         potentialDistance = abs(destX - nextX) + abs(destY - nextY);
         potentialCrash = crashChecker(nextX, nextY, this);
 
+        bool turnRight = false;
         if (gonnaCrash && !potentialCrash) {
-            gonnaCrash = false;
-            bestDistance = potentialDistance;
-            computer->dirX = 1;
-            computer->dirY = 0;
+            turnRight = true;
         }
-        else if (!potentialCrash &&  chaseTrueRunFalse && potentialDistance < bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = 1;
-            computer->dirY = 0;
-        }
-        else if (!potentialCrash && !chaseTrueRunFalse && potentialDistance > bestDistance) {
-            bestDistance = potentialDistance;
-            computer->dirX = 1;
-            computer->dirY = 0;
+        else if (!potentialCrash && potentialDistance < bestDistance) {
+            turnRight = true;
         }
         
+        if (turnRight) {
+            gonnaCrash = potentialCrash;
+            bestDistance = potentialDistance;
+            computer->dirX = 1;
+            computer->dirY = 0;
+        }
     }
     
     return;
