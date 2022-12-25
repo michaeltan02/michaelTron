@@ -20,7 +20,7 @@
 
 /*** Definitions ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
-#define MICHAEL_TRON_VER "0.7"
+#define MICHAEL_TRON_VER "1.0"
 
 enum keys {
     BACKSPACE = 127,
@@ -566,7 +566,7 @@ void drawScreen(tron * this){
     // Instructions
     abAppend(&ab, "\x1b[7m", 4); // invert color
     char * instruction = this->singlePlayer? "Player 1: WASD | Player 2: Computer | Ctrl-Q to quit" : 
-                                                "Player 1: WASD | Player2: Arrow keys | Ctrl-Q to quit";
+                                                "Player 1: WASD | Player 2: Arrow keys | Ctrl-Q to quit";
     int instLen = strlen(instruction);
     abAppend(&ab, instruction, instLen > this->boardCols ? this->boardCols : instLen);
     abAppend(&ab, "\x1b[m", 3); // invert color
